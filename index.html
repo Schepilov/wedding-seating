@@ -6,6 +6,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#FAF6F1">
 
+<link rel="apple-touch-icon" sizes="180x180" href="https://schepi.love/assets/favicon/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="https://schepi.love/assets/favicon/favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="https://schepi.love/assets/favicon/favicon-16x16.png">
+<link rel="manifest" href="https://schepi.love/assets/favicon/site.webmanifest">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -16,11 +21,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-
-<link rel="apple-touch-icon" sizes="180x180" href="https://schepi.love/assets/favicon/apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="https://schepi.love/assets/favicon/favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="https://schepi.love/assets/favicon/favicon-16x16.png">
-<link rel="manifest" href="https://schepi.love/assets/favicon/site.webmanifest">
 
 <style>
   html, body { margin: 0; padding: 0; }
@@ -80,8 +80,11 @@ const RESPONSIVE_CSS = `
 @media (max-width: 1023px) {
   .ws-chart-order {
     position: sticky;
-    top: 76px;
-    z-index: 20;
+    top: var(--ws-header-height, 96px);
+    z-index: 25;
+    background: #FAF6F1 !important;
+    border-color: rgba(196,145,165,0.35) !important;
+    box-shadow: 0 10px 24px rgba(58,24,40,0.12) !important;
   }
 }
 @media (min-width: 1024px) {
@@ -110,37 +113,24 @@ const RESPONSIVE_CSS = `
 .ws-seat { cursor: pointer; }
 .ws-seat .ws-seat-circle { transition: stroke .12s, stroke-width .12s; }
 .ws-seat:hover .ws-seat-circle { stroke: #9C2E4F; stroke-width: 2; }
-.ws-seat-tooltip {
-  position: fixed;
-  z-index: 80;
-  pointer-events: none;
-  max-width: min(320px, calc(100vw - 32px));
-  padding: 8px 11px;
-  border-radius: 10px;
-  background: rgba(58, 24, 40, 0.94);
-  color: #FAF6F1;
-  box-shadow: 0 10px 30px rgba(58,24,40,0.22);
-  border: 1px solid rgba(255,255,255,0.16);
-  font-size: 12.5px;
-  line-height: 1.35;
-  letter-spacing: 0.01em;
-  transform: translate(12px, 12px);
+.ws-seat-tooltip { pointer-events: none; }
+.ws-seat-tooltip-box {
+  fill: rgba(58, 24, 40, 0.96);
+  stroke: rgba(255,255,255,0.18);
+  stroke-width: 1;
+  filter: drop-shadow(0 10px 22px rgba(58,24,40,0.24));
 }
-.ws-seat-tooltip__main {
-  display: block;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-weight: 600;
+.ws-seat-tooltip-main {
+  fill: #FAF6F1;
+  font-family: 'Manrope', -apple-system, sans-serif;
+  font-size: 16px;
+  font-weight: 700;
 }
-.ws-seat-tooltip__note {
-  display: block;
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: rgba(250,246,241,0.82);
-  font-size: 11.5px;
+.ws-seat-tooltip-note {
+  fill: rgba(250,246,241,0.82);
+  font-family: 'Manrope', -apple-system, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
 }
 .ws-modal-bg { position: fixed; inset: 0; background: rgba(58,24,40,0.45);
   backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
@@ -176,7 +166,6 @@ function App() {
   const [loaded, setLoaded] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [hoveredSeat, setHoveredSeat] = useState(null);
-  const [tooltipPoint, setTooltipPoint] = useState({ x: 0, y: 0 });
   const [seatPositions, setSeatPositions] = useState([]);
   const [jointPositions, setJointPositions] = useState([]);
   const [search, setSearch] = useState('');
@@ -187,6 +176,22 @@ function App() {
   const [syncError, setSyncError] = useState(null);
   const saveTimerRef = useRef(null);
   const fromServerRef = useRef(false); // флаг: текущее изменение пришло с сервера, не сохранять
+  const headerRef = useRef(null);
+
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (!headerRef.current) return;
+      document.documentElement.style.setProperty("--ws-header-height", headerRef.current.offsetHeight + "px");
+    };
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+    const ro = window.ResizeObserver ? new ResizeObserver(updateHeaderHeight) : null;
+    if (ro && headerRef.current) ro.observe(headerRef.current);
+    return () => {
+      window.removeEventListener("resize", updateHeaderHeight);
+      if (ro) ro.disconnect();
+    };
+  }, []);
 
   // === Firebase: подписка на realtime-обновления + первичная загрузка ===
   useEffect(() => {
@@ -395,9 +400,6 @@ function App() {
   }, [search, allSeats]);
 
   const selectedGuest = selectedSeat ? guests[selectedSeat] || { name: '', note: '' } : null;
-  const activeTooltipSeat = selectedSeat || hoveredSeat;
-  const activeTooltipGuest = activeTooltipSeat ? guests[activeTooltipSeat] : null;
-  const showSeatTooltip = !!(activeTooltipSeat && activeTooltipGuest && activeTooltipGuest.name && activeTooltipGuest.name.trim());
 
   return (
     <div style={{
@@ -407,8 +409,8 @@ function App() {
     }}>
       <style>{RESPONSIVE_CSS}</style>
 
-      <header style={{
-        background: 'rgba(250, 246, 241, 0.85)', backdropFilter: 'blur(10px)',
+      <header ref={headerRef} style={{
+        background: '#FAF6F1', backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)', borderBottom: '1px solid rgba(196, 145, 165, 0.2)',
         position: 'sticky', top: 0, zIndex: 30,
       }}>
@@ -503,13 +505,13 @@ function App() {
           </aside>
 
           <section className="ws-chart-order" style={{
-            background: 'rgba(255,255,255,0.45)', border: '1px solid rgba(196,145,165,0.18)',
+            background: '#FAF6F1', border: '1px solid rgba(196,145,165,0.28)',
             borderRadius: 14, padding: 8, overflow: 'hidden',
             boxShadow: '0 1px 2px rgba(58,24,40,0.04)' }}>
             <SVGChart onPathRef={handlePathRef} seatPositions={seatPositions}
               jointPositions={jointPositions} guests={guests}
-              selectedSeat={selectedSeat} onSelectSeat={setSelectedSeat}
-              onHoverSeat={setHoveredSeat} onTooltipMove={setTooltipPoint} />
+              selectedSeat={selectedSeat} hoveredSeat={hoveredSeat}
+              onSelectSeat={setSelectedSeat} onHoverSeat={setHoveredSeat} />
             <div style={{ fontSize: 11.5, color: '#9A6B7C', textAlign: 'center',
               padding: '8px 4px 4px', letterSpacing: '0.04em' }}>
               кликните по любому месту, чтобы добавить или изменить гостя
@@ -534,14 +536,6 @@ function App() {
         </div>
       </main>
 
-      {showSeatTooltip && (
-        <div className="ws-seat-tooltip" style={selectedSeat
-          ? { right: 16, top: 84, transform: 'none' }
-          : { left: tooltipPoint.x, top: tooltipPoint.y }}>
-          <span className="ws-seat-tooltip__main">№{activeTooltipSeat} — {activeTooltipGuest.name}</span>
-          {activeTooltipGuest.note && <span className="ws-seat-tooltip__note">({activeTooltipGuest.note})</span>}
-        </div>
-      )}
 
       {showResetConfirm && (
         <Modal onClose={() => setShowResetConfirm(false)}>
@@ -581,10 +575,14 @@ function App() {
   );
 }
 
-function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSeat, onSelectSeat, onHoverSeat, onTooltipMove }) {
+function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSeat, hoveredSeat, onSelectSeat, onHoverSeat }) {
+  const activeTooltipSeat = hoveredSeat || selectedSeat;
+  const activeTooltipPos = activeTooltipSeat ? seatPositions.find((p) => p.number === activeTooltipSeat) : null;
+  const activeTooltipGuest = activeTooltipSeat ? guests[activeTooltipSeat] : null;
+  const showSeatTooltip = !!(activeTooltipPos && activeTooltipGuest && activeTooltipGuest.name && activeTooltipGuest.name.trim());
   return (
     <div style={{ width: '100%', overflowX: 'auto' }} onMouseLeave={() => onHoverSeat(null)}>
-      <svg viewBox="-40 200 1880 620"
+      <svg viewBox="-40 120 1880 700"
         style={{ width: '100%', minWidth: 760, height: 'auto', display: 'block' }}
         preserveAspectRatio="xMidYMid meet">
         <defs>
@@ -625,15 +623,8 @@ function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSe
           const isSelected = selectedSeat === pos.number;
           return (
             <g key={pos.number} className="ws-seat"
-              onClick={(e) => {
-                onSelectSeat(pos.number);
-                onTooltipMove({ x: e.clientX, y: e.clientY });
-              }}
-              onMouseEnter={(e) => {
-                onHoverSeat(pos.number);
-                onTooltipMove({ x: e.clientX, y: e.clientY });
-              }}
-              onMouseMove={(e) => onTooltipMove({ x: e.clientX, y: e.clientY })}
+              onClick={() => onSelectSeat(pos.number)}
+              onMouseEnter={() => onHoverSeat(pos.number)}
               onMouseLeave={() => onHoverSeat(null)}>
               {isSelected && <circle cx={pos.x} cy={pos.y} r="26" fill="none"
                 stroke="#C9A961" strokeWidth="2.5" filter="url(#ws-glow)" />}
@@ -642,7 +633,7 @@ function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSe
                 strokeWidth={filled ? 2 : 1.2} filter="url(#ws-seatShadow)" />
               {filled && <circle cx={pos.x} cy={pos.y - 12} r="3" fill="#9C2E4F" />}
               <text x={pos.x} y={pos.y + (filled ? 1 : 0)} textAnchor="middle"
-                dominantBaseline="central" fontSize="12"
+                dominantBaseline="central" fontSize="16"
                 fontWeight={filled ? 600 : 500}
                 fill={filled ? '#3A1828' : '#7B4D63'}
                 fontFamily='"Manrope", sans-serif'
@@ -653,8 +644,42 @@ function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSe
             </g>
           );
         })}
+        {showSeatTooltip && (
+          <SeatTooltip
+            x={activeTooltipPos.x}
+            y={activeTooltipPos.y}
+            seatNumber={activeTooltipSeat}
+            guest={activeTooltipGuest}
+          />
+        )}
       </svg>
     </div>
+  );
+}
+
+
+function clipTooltipText(value, max = 34) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  return text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text;
+}
+
+function SeatTooltip({ x, y, seatNumber, guest }) {
+  const name = clipTooltipText(guest.name, 30);
+  const note = guest.note ? `${clipTooltipText(guest.note, 32)}` : '';
+  const mainText = `№${seatNumber} — ${name}`;
+  const width = Math.max(132, Math.min(300, Math.max(mainText.length * 7.1, note ? note.length * 6.4 : 0) + 28));
+  const height = note ? 55 : 36;
+  const tooltipX = Math.max(-20, Math.min(1880 - width, x - width / 2));
+  const tooltipY = y - height - 34;
+
+  return (
+    <g className="ws-seat-tooltip" transform={`translate(${tooltipX}, ${tooltipY})`}>
+      <rect className="ws-seat-tooltip-box" x="0" y="0" width={width} height={height} rx="10" ry="10" />
+      <path d={`M ${x - tooltipX - 7} ${height - 1} L ${x - tooltipX} ${height + 8} L ${x - tooltipX + 7} ${height - 1} Z`}
+        fill="rgba(58, 24, 40, 0.96)" />
+      <text className="ws-seat-tooltip-main" x="14" y={note ? 22 : 23}>{mainText}</text>
+      {note && <text className="ws-seat-tooltip-note" x="14" y="40">{note}</text>}
+    </g>
   );
 }
 
