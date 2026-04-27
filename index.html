@@ -514,7 +514,7 @@ function App() {
               onSelectSeat={setSelectedSeat} onHoverSeat={setHoveredSeat} />
             <div style={{ fontSize: 11.5, color: '#9A6B7C', textAlign: 'center',
               padding: '8px 4px 4px', letterSpacing: '0.04em' }}>
-              кликните по любому месту, чтобы добавить или изменить гостя
+              нажми на любое место, чтобы добавить или изменить гостя
             </div>
           </section>
 
@@ -666,7 +666,7 @@ function clipTooltipText(value, max = 34) {
 function SeatTooltip({ x, y, seatNumber, guest }) {
   const name = clipTooltipText(guest.name, 30);
   const note = guest.note ? `${clipTooltipText(guest.note, 32)}` : '';
-  const mainText = `№${seatNumber} — ${name}`;
+  const mainText = `№ ${seatNumber} — ${name}`;
   const width = Math.max(132, Math.min(300, Math.max(mainText.length * 7.1, note ? note.length * 6.4 : 0) + 28));
   const height = note ? 55 : 36;
   const tooltipX = Math.max(-20, Math.min(1880 - width, x - width / 2));
@@ -753,10 +753,9 @@ function EmptyEdit() {
         <Icon name="users" size={24} />
       </div>
       <h3 style={{ fontFamily: '"Cormorant Garamond", serif', fontSize: 22,
-        fontWeight: 500, margin: '0 0 8px', color: '#3A1828' }}>Выберите место</h3>
+        fontWeight: 500, margin: '0 0 8px', color: '#3A1828' }}>Выбери место</h3>
       <p style={{ fontSize: 13, color: '#7B4D63', lineHeight: 1.55, margin: 0 }}>
-        Кликните по нужному месту на схеме или в списке слева, чтобы добавить или изменить гостя.
-        Стрелки ← → переключают между местами.
+        Нажми на нужное место на схеме или в спике, чтобы добавить или изменить гостя
       </p>
     </div>
   );
