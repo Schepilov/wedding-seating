@@ -53,7 +53,7 @@
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-const TOTAL_SEATS = 55;
+const TOTAL_SEATS = 54;
 const INNER_SEATS = 28;
 const DOC_ID = 'main';
 
@@ -210,6 +210,10 @@ function AutocompleteInput({ inputRef, value, onChange, guestList, onSelectGuest
         }}
         placeholder={placeholder}
         autoComplete="off"
+        data-1p-ignore
+        data-lpignore="true"
+        data-bwignore="true"
+        data-form-type="other"
       />
       {open && suggestions.length > 0 && (
         <div className="ws-ac-dropdown">
@@ -956,31 +960,43 @@ function clipTooltipText(value, max = 34) {
 }
 
 function SeatTooltip({ x, y, seatNumber, guest }) {
-  const name = clipTooltipText(guest.name, 30);
-  const role = guest.role ? clipTooltipText(guest.role, 34) : '';
-  const note = guest.note ? clipTooltipText(guest.note, 34) : '';
+  const name = clipTooltipText(guest.name, 32);
+  const role = guest.role ? clipTooltipText(guest.role, 38) : '';
+  const hasNote = !!(guest.note && guest.note.trim());
   const mainText = `№ ${seatNumber} — ${name}`;
-  const extraLines = [role, note].filter(Boolean);
-  const numLines = 1 + extraLines.length;
+  const hasRole = !!role;
 
-  const width = Math.max(132, Math.min(320,
-    Math.max(mainText.length * 7.1, ...extraLines.map(l => l.length * 6.4)) + 28
-  ));
-  const height = 36 + extraLines.length * 19;
+  // px-per-char estimates: main line 16px/700, role line 13px/500 italic
+  const mainW = mainText.length * 9.2 + (hasNote && !hasRole ? 22 : 0);
+  const roleW = hasRole ? role.length * 7.8 + (hasNote ? 22 : 0) : 0;
+  const width = Math.max(140, Math.max(mainW, roleW) + 28);
+  const height = hasRole ? 55 : 36;
+
   const tooltipX = Math.max(-20, Math.min(1880 - width, x - width / 2));
   const tooltipY = y - height - 34;
+  const arrowX = x - tooltipX;
+
+  // Position of note dot — right side, vertically centred on whichever is the last line
+  const dotY = hasRole ? 40 : 22;
+  const dotX = width - 14;
 
   return (
     <g className="ws-seat-tooltip" transform={`translate(${tooltipX}, ${tooltipY})`}>
       <rect className="ws-seat-tooltip-box" x="0" y="0" width={width} height={height} rx="10" ry="10" />
-      <path d={`M ${x - tooltipX - 7} ${height - 1} L ${x - tooltipX} ${height + 8} L ${x - tooltipX + 7} ${height - 1} Z`}
+      <path d={`M ${arrowX - 7} ${height - 1} L ${arrowX} ${height + 8} L ${arrowX + 7} ${height - 1} Z`}
         fill="rgba(58, 24, 40, 0.96)" />
-      <text className="ws-seat-tooltip-main" x="14" y={numLines === 1 ? 23 : 21}>{mainText}</text>
-      {extraLines.map((line, i) => (
-        <text key={i}
-          className={i === 0 && role ? 'ws-seat-tooltip-role' : 'ws-seat-tooltip-note'}
-          x="14" y={21 + (i + 1) * 19}>{line}</text>
-      ))}
+      <text className="ws-seat-tooltip-main" x="14" y={hasRole ? 21 : 23}>{mainText}</text>
+      {hasRole && (
+        <text className="ws-seat-tooltip-role" x="14" y="40">{role}</text>
+      )}
+      {hasNote && (
+        <g>
+          <circle cx={dotX} cy={dotY} r="7" fill="rgba(232,173,192,0.25)" stroke="rgba(232,173,192,0.6)" strokeWidth="1" />
+          <text x={dotX} y={dotY + 1} textAnchor="middle" dominantBaseline="central"
+            fontSize="9" fontWeight="700" fill="#E8ADC0" fontFamily='"Manrope", sans-serif'
+            style={{ userSelect: 'none' }}>✎</text>
+        </g>
+      )}
     </g>
   );
 }
