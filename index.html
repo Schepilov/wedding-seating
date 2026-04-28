@@ -320,7 +320,7 @@ function GuestListModal({ guestList, onSave, onClose }) {
       <h2 style={{ fontFamily: '"Cormorant Garamond", serif', fontSize: 26, fontWeight: 600,
         margin: '0 0 4px', color: '#3A1828' }}>Список гостей</h2>
       <p style={{ fontSize: 13, color: '#7B4D63', margin: '0 0 18px', lineHeight: 1.5 }}>
-        Имена из списка будут доступны в автодополнении при заполнении мест.
+        Имена из списка будут доступны в автодополнении при заполнении мест
       </p>
 
       {/* CSV file */}
@@ -333,7 +333,7 @@ function GuestListModal({ guestList, onSave, onClose }) {
           <Icon name="upload" size={13} /> Выбрать файл (.csv)
         </button>
         <span style={{ fontSize: 12, color: '#9A6B7C', marginLeft: 10 }}>
-          Формат: <code style={{ background: 'rgba(232,173,192,0.2)', padding: '1px 4px', borderRadius: 3 }}>Имя Фамилия, Кто это</code>
+          Формат: <code style={{ background: 'rgba(232,173,192,0.2)', padding: '1px 4px', borderRadius: 3 }}>Имя Фамилия, Кто это</code>
         </span>
       </div>
 
@@ -353,8 +353,8 @@ function GuestListModal({ guestList, onSave, onClose }) {
         </div>
         {urlError && <div style={{ fontSize: 12, color: '#9C2E4F', marginTop: 5 }}>⚠ {urlError}</div>}
         <div style={{ fontSize: 11.5, color: '#9A6B7C', marginTop: 5, lineHeight: 1.4 }}>
-          Таблица должна быть опубликована: Файл → Поделиться → Опубликовать в интернете → CSV.
-          Первый столбец — имя, второй (необязательно) — кто это.
+          Таблица должна быть опубликована: Файл → Поделиться → Опубликовать в интернете → CSV.
+          Первый столбец — имя, второй (необязательно) — кто это
         </div>
       </div>
 
@@ -370,7 +370,7 @@ function GuestListModal({ guestList, onSave, onClose }) {
           <input className="ws-input" type="text" value={newRole}
             onChange={e => setNewRole(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && handleAdd()}
-            placeholder="Кто это (необязательно)" style={{ flex: 2, fontSize: 13 }} />
+            placeholder="Кто это" style={{ flex: 2, fontSize: 13 }} />
           <button className="ws-btn ws-btn-primary" onClick={handleAdd}
             disabled={!newName.trim()} style={{ flexShrink: 0 }}>+ Добавить</button>
         </div>
@@ -838,7 +838,7 @@ function App() {
           <h2 style={{ fontFamily: '"Cormorant Garamond", serif', fontSize: 24, fontWeight: 600,
             margin: '0 0 10px', color: '#3A1828' }}>Сбросить всю рассадку?</h2>
           <p style={{ fontSize: 14, color: '#5C2A3E', margin: '0 0 20px', lineHeight: 1.5 }}>
-            Все имена и примечания будут удалены у всех, кто сейчас открыл сайт. Это действие нельзя отменить.
+            Все имена и примечания будут удалены у всех, кто сейчас открыл сайт. Это действие нельзя отменить
           </p>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button className="ws-btn ws-btn-ghost" onClick={() => setShowResetConfirm(false)}>Отмена</button>
@@ -855,8 +855,8 @@ function App() {
             Каждая строка — один гость по порядку, начиная с места №1. Форматы:{' '}
             <code style={{ background: 'rgba(232,173,192,0.25)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>Имя</code>{' '}
             или{' '}
-            <code style={{ background: 'rgba(232,173,192,0.25)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>Имя | кто это | примечание</code>.
-            Существующие записи в этих местах будут заменены.
+            <code style={{ background: 'rgba(232,173,192,0.25)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>Имя | кто это | примечание</code>.
+            Существующие записи в этих местах будут заменены
           </p>
           <textarea className="ws-input" value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
