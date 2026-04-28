@@ -186,7 +186,7 @@ function AutocompleteInput({ inputRef, value, onChange, guestList, takenNames, o
     if (!guestList || guestList.length === 0) return [];
     const q = (value || '').toLowerCase().trim();
     const filtered = q ? guestList.filter(g => g.name.toLowerCase().includes(q)) : guestList;
-    return filtered.filter(g => !takenNames || !takenNames.has(g.name.toLowerCase())).slice(0, 8);
+    return filtered.filter(g => !takenNames || !takenNames.has(g.name.toLowerCase()));
   }, [value, guestList, takenNames]);
 
   const select = (g) => { onSelectGuest(g); setOpen(false); };
