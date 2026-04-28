@@ -35,10 +35,6 @@
 <div id="root"></div>
 
 <script>
-  // ============================================================
-  //   НАСТРОЙКА FIREBASE — замените на свой конфиг
-  //   (как получить — см. README или инструкцию в чате)
-  // ============================================================
   const firebaseConfig = {
     apiKey: "AIzaSyBlIa4zeEXpGrEG_3s2FNqeEni2MoVbPh8",
     authDomain: "wedding-seating-c816b.firebaseapp.com",
@@ -50,7 +46,6 @@
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
-  // включаем офлайн-кэш — сайт работает без интернета и синхронизируется когда связь вернётся
   db.enablePersistence({ synchronizeTabs: true }).catch(() => {});
   window.__db = db;
 </script>
@@ -60,7 +55,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
 const TOTAL_SEATS = 55;
 const INNER_SEATS = 28;
-const DOC_ID = 'main'; // если хотите несколько схем рассадки — поменяйте здесь
+const DOC_ID = 'main';
 
 const PATH_D =
   'M 60 720 ' +
@@ -132,17 +127,35 @@ const RESPONSIVE_CSS = `
   font-size: 15px;
   font-weight: 500;
 }
+.ws-seat-tooltip-role {
+  fill: #E8ADC0;
+  font-family: 'Manrope', -apple-system, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  font-style: italic;
+}
 .ws-modal-bg { position: fixed; inset: 0; background: rgba(58,24,40,0.45);
   backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center;
   padding: 16px; z-index: 50; animation: ws-fade-in .15s ease-out; }
 .ws-modal { background: #FAF6F1; border-radius: 16px; padding: 24px; max-width: 520px; width: 100%;
   max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 64px rgba(58,24,40,0.28);
   border: 1px solid rgba(196,145,165,0.25); animation: ws-pop-in .18s ease-out; }
+.ws-modal-wide { max-width: 640px; }
 @keyframes ws-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes ws-pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.ws-ac-dropdown { position: absolute; top: 100%; left: 0; right: 0; z-index: 200;
+  background: #FAF6F1; border: 1px solid rgba(196,145,165,0.4);
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(58,24,40,0.14);
+  margin-top: 3px; max-height: 220px; overflow-y: auto; }
+.ws-ac-item { padding: 8px 12px; cursor: pointer; border-bottom: 1px solid rgba(196,145,165,0.12);
+  display: flex; align-items: center; gap: 8px; }
+.ws-ac-item:last-child { border-bottom: none; }
+.ws-ac-item.is-hi { background: rgba(232,173,192,0.28); }
+.ws-guestlist-row { display: flex; align-items: center; gap: 8px; padding: 6px 0;
+  border-bottom: 1px solid rgba(196,145,165,0.12); }
+.ws-guestlist-row:last-child { border-bottom: none; }
 `;
 
-// — Иконки lucide inline (чтобы не тащить ещё одну зависимость через CDN) —
 const Icon = ({ name, size = 14 }) => {
   const common = { width: size, height: size, viewBox: "0 0 24 24", fill: "none",
     stroke: "currentColor", strokeWidth: "2", strokeLinecap: "round", strokeLinejoin: "round" };
@@ -157,12 +170,258 @@ const Icon = ({ name, size = 14 }) => {
     case 'left': return <svg {...common}><polyline points="15 18 9 12 15 6"/></svg>;
     case 'right': return <svg {...common}><polyline points="9 18 15 12 9 6"/></svg>;
     case 'cloud': return <svg {...common}><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>;
+    case 'list': return <svg {...common}><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+    case 'link': return <svg {...common}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>;
+    case 'trash': return <svg {...common}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg>;
     default: return null;
   }
 };
 
+// — Autocomplete input for guest name —
+function AutocompleteInput({ inputRef, value, onChange, guestList, onSelectGuest, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [hi, setHi] = useState(0);
+
+  const suggestions = useMemo(() => {
+    if (!guestList || guestList.length === 0) return [];
+    const q = (value || '').toLowerCase().trim();
+    const filtered = q ? guestList.filter(g => g.name.toLowerCase().includes(q)) : guestList;
+    return filtered.slice(0, 8);
+  }, [value, guestList]);
+
+  const select = (g) => { onSelectGuest(g); setOpen(false); };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        ref={inputRef}
+        className="ws-input"
+        type="text"
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); setHi(0); }}
+        onFocus={() => { setOpen(true); setHi(0); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onKeyDown={e => {
+          if (!open || suggestions.length === 0) return;
+          if (e.key === 'ArrowDown') { e.preventDefault(); setHi(h => Math.min(h + 1, suggestions.length - 1)); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); setHi(h => Math.max(h - 1, 0)); }
+          else if (e.key === 'Enter') { e.preventDefault(); select(suggestions[hi]); }
+          else if (e.key === 'Escape') setOpen(false);
+        }}
+        placeholder={placeholder}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <div className="ws-ac-dropdown">
+          {suggestions.map((g, i) => (
+            <div key={i} className={`ws-ac-item${i === hi ? ' is-hi' : ''}`}
+              onMouseDown={e => { e.preventDefault(); select(g); }}
+              onMouseEnter={() => setHi(i)}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: '#3A1828', flex: 1 }}>{g.name}</span>
+              {g.role && <span style={{ fontSize: 11, color: '#9A6B7C', fontStyle: 'italic' }}>{g.role}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// — Парсинг CSV-текста в массив [{name, role}] —
+function parseGuestCSV(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  if (lines.length === 0) return [];
+  let start = 0;
+  const firstLow = lines[0].toLowerCase();
+  if (firstLow.includes('имя') || firstLow.includes('name') || firstLow.includes('фамили') || firstLow.includes('гость')) {
+    start = 1;
+  }
+  const result = [];
+  for (let i = start; i < lines.length; i++) {
+    const parts = lines[i].split(/[,;|]/).map(s => s.trim().replace(/^"(.*)"$/s, '$1'));
+    const name = parts[0];
+    const role = parts[1] || '';
+    if (name) result.push({ name, role });
+  }
+  return result;
+}
+
+// — Модалка управления списком гостей —
+function GuestListModal({ guestList, onSave, onClose }) {
+  const [list, setList] = useState(guestList.map(g => ({ ...g })));
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState('');
+  const [sheetUrl, setSheetUrl] = useState('');
+  const [urlLoading, setUrlLoading] = useState(false);
+  const [urlError, setUrlError] = useState('');
+  const fileRef = useRef(null);
+  const newNameRef = useRef(null);
+
+  const handleFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = parseGuestCSV(ev.target.result);
+      setList(prev => {
+        const existing = new Set(prev.map(g => g.name.toLowerCase()));
+        return [...prev, ...parsed.filter(g => !existing.has(g.name.toLowerCase()))];
+      });
+    };
+    reader.readAsText(file, 'UTF-8');
+    e.target.value = '';
+  };
+
+  const handleUrlLoad = async () => {
+    const url = sheetUrl.trim();
+    if (!url) return;
+    setUrlLoading(true);
+    setUrlError('');
+    try {
+      // Поддержка обычной ссылки на Google Sheets — конвертируем в export CSV
+      let fetchUrl = url;
+      const gSheetMatch = url.match(/\/spreadsheets\/d\/([^/]+)/);
+      if (gSheetMatch && !url.includes('/pub?') && !url.includes('export?format')) {
+        fetchUrl = `https://docs.google.com/spreadsheets/d/${gSheetMatch[1]}/export?format=csv`;
+      }
+      const resp = await fetch(fetchUrl);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const text = await resp.text();
+      const parsed = parseGuestCSV(text);
+      if (parsed.length === 0) throw new Error('Список пуст или формат не распознан');
+      setList(prev => {
+        const existing = new Set(prev.map(g => g.name.toLowerCase()));
+        return [...prev, ...parsed.filter(g => !existing.has(g.name.toLowerCase()))];
+      });
+      setSheetUrl('');
+    } catch (err) {
+      setUrlError(err.message || 'Не удалось загрузить');
+    }
+    setUrlLoading(false);
+  };
+
+  const handleAdd = () => {
+    const name = newName.trim();
+    if (!name) return;
+    setList(prev => [...prev, { name, role: newRole.trim() }]);
+    setNewName('');
+    setNewRole('');
+    setTimeout(() => newNameRef.current && newNameRef.current.focus(), 30);
+  };
+
+  const handleRemove = (idx) => setList(prev => prev.filter((_, i) => i !== idx));
+
+  return (
+    <Modal onClose={onClose} wide>
+      <h2 style={{ fontFamily: '"Cormorant Garamond", serif', fontSize: 26, fontWeight: 600,
+        margin: '0 0 4px', color: '#3A1828' }}>Список гостей</h2>
+      <p style={{ fontSize: 13, color: '#7B4D63', margin: '0 0 18px', lineHeight: 1.5 }}>
+        Имена из списка будут доступны в автодополнении при заполнении мест.
+      </p>
+
+      {/* CSV file */}
+      <div style={{ marginBottom: 10 }}>
+        <div style={{ fontSize: 10.5, color: '#7B4D63', textTransform: 'uppercase',
+          letterSpacing: '0.1em', fontWeight: 600, marginBottom: 6 }}>Загрузить из CSV-файла</div>
+        <input ref={fileRef} type="file" accept=".csv,.txt" style={{ display: 'none' }} onChange={handleFile} />
+        <button className="ws-btn ws-btn-ghost" style={{ border: '1px dashed rgba(196,145,165,0.5)' }}
+          onClick={() => fileRef.current.click()}>
+          <Icon name="upload" size={13} /> Выбрать файл (.csv)
+        </button>
+        <span style={{ fontSize: 12, color: '#9A6B7C', marginLeft: 10 }}>
+          Формат: <code style={{ background: 'rgba(232,173,192,0.2)', padding: '1px 4px', borderRadius: 3 }}>Имя Фамилия, Кто это</code>
+        </span>
+      </div>
+
+      {/* Google Sheets URL */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ fontSize: 10.5, color: '#7B4D63', textTransform: 'uppercase',
+          letterSpacing: '0.1em', fontWeight: 600, marginBottom: 6 }}>Загрузить из Google Sheets</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input className="ws-input" type="url" value={sheetUrl} onChange={e => setSheetUrl(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleUrlLoad()}
+            placeholder="https://docs.google.com/spreadsheets/d/…"
+            style={{ flex: 1, fontSize: 13 }} />
+          <button className="ws-btn ws-btn-primary" onClick={handleUrlLoad}
+            disabled={urlLoading || !sheetUrl.trim()} style={{ flexShrink: 0 }}>
+            {urlLoading ? '…' : <><Icon name="link" size={13} /> Загрузить</>}
+          </button>
+        </div>
+        {urlError && <div style={{ fontSize: 12, color: '#9C2E4F', marginTop: 5 }}>⚠ {urlError}</div>}
+        <div style={{ fontSize: 11.5, color: '#9A6B7C', marginTop: 5, lineHeight: 1.4 }}>
+          Таблица должна быть опубликована: Файл → Поделиться → Опубликовать в интернете → CSV.
+          Первый столбец — имя, второй (необязательно) — кто это.
+        </div>
+      </div>
+
+      {/* Manual add */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10.5, color: '#7B4D63', textTransform: 'uppercase',
+          letterSpacing: '0.1em', fontWeight: 600, marginBottom: 6 }}>Добавить вручную</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <input ref={newNameRef} className="ws-input" type="text" value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="Имя Фамилия" style={{ flex: 2, fontSize: 13 }} />
+          <input className="ws-input" type="text" value={newRole}
+            onChange={e => setNewRole(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAdd()}
+            placeholder="Кто это (необязательно)" style={{ flex: 2, fontSize: 13 }} />
+          <button className="ws-btn ws-btn-primary" onClick={handleAdd}
+            disabled={!newName.trim()} style={{ flexShrink: 0 }}>+ Добавить</button>
+        </div>
+      </div>
+
+      {/* List */}
+      <div style={{ border: '1px solid rgba(196,145,165,0.22)', borderRadius: 10,
+        padding: '6px 12px', maxHeight: 240, overflowY: 'auto', marginBottom: 18,
+        background: 'rgba(255,255,255,0.5)' }}>
+        {list.length === 0 ? (
+          <p style={{ textAlign: 'center', fontSize: 13, color: '#9A6B7C', padding: '16px 0', margin: 0 }}>
+            Список пуст — загрузите CSV или добавьте гостей вручную
+          </p>
+        ) : (
+          <>
+            <div style={{ fontSize: 11, color: '#9A6B7C', padding: '4px 0 6px',
+              borderBottom: '1px solid rgba(196,145,165,0.2)', marginBottom: 4,
+              display: 'flex', gap: 8 }}>
+              <span style={{ flex: 2 }}>Имя</span>
+              <span style={{ flex: 2 }}>Кто это</span>
+              <span style={{ width: 28 }}></span>
+            </div>
+            {list.map((g, i) => (
+              <div key={i} className="ws-guestlist-row">
+                <span style={{ flex: 2, fontSize: 13, color: '#3A1828', fontWeight: 500 }}>{g.name}</span>
+                <span style={{ flex: 2, fontSize: 12, color: '#7B4D63', fontStyle: g.role ? 'normal' : 'italic' }}>
+                  {g.role || '—'}
+                </span>
+                <button onClick={() => handleRemove(i)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                    color: '#C4748A', padding: '2px 4px', borderRadius: 4,
+                    display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <Icon name="trash" size={13} />
+                </button>
+              </div>
+            ))}
+            <div style={{ fontSize: 11.5, color: '#9A6B7C', textAlign: 'right',
+              padding: '6px 0 2px' }}>{list.length} гостей</div>
+          </>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="ws-btn ws-btn-ghost" onClick={onClose}>Отмена</button>
+        <button className="ws-btn ws-btn-primary" onClick={() => { onSave(list); onClose(); }}>
+          Сохранить список
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function App() {
   const [guests, setGuests] = useState({});
+  const [guestList, setGuestList] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [hoveredSeat, setHoveredSeat] = useState(null);
@@ -171,11 +430,12 @@ function App() {
   const [search, setSearch] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showGuestList, setShowGuestList] = useState(false);
   const [bulkText, setBulkText] = useState('');
   const [saveStatus, setSaveStatus] = useState('idle');
   const [syncError, setSyncError] = useState(null);
   const saveTimerRef = useRef(null);
-  const fromServerRef = useRef(false); // флаг: текущее изменение пришло с сервера, не сохранять
+  const fromServerRef = useRef(false);
   const headerRef = useRef(null);
 
   useEffect(() => {
@@ -193,7 +453,6 @@ function App() {
     };
   }, []);
 
-  // === Firebase: подписка на realtime-обновления + первичная загрузка ===
   useEffect(() => {
     const docRef = window.__db.collection('seating').doc(DOC_ID);
     const unsubscribe = docRef.onSnapshot(
@@ -202,9 +461,10 @@ function App() {
           const data = snap.data();
           fromServerRef.current = true;
           setGuests(data.guests || {});
+          setGuestList(data.guestList || []);
         } else {
-          // первый запуск — документа ещё нет
           setGuests({});
+          setGuestList([]);
         }
         setLoaded(true);
         setSyncError(null);
@@ -218,10 +478,8 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // === Firebase: автосохранение с дебаунсом ===
   useEffect(() => {
     if (!loaded) return;
-    // если изменение пришло с сервера — не отправляем его обратно (чтобы избежать петли)
     if (fromServerRef.current) {
       fromServerRef.current = false;
       return;
@@ -232,6 +490,7 @@ function App() {
       try {
         await window.__db.collection('seating').doc(DOC_ID).set({
           guests,
+          guestList,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         });
         setSaveStatus('saved');
@@ -242,9 +501,8 @@ function App() {
       }
     }, 500);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [guests, loaded]);
+  }, [guests, guestList, loaded]);
 
-  // === Геометрия мест ===
   const handlePathRef = useCallback((node) => {
     if (!node) return;
     const totalLength = node.getTotalLength();
@@ -291,9 +549,9 @@ function App() {
   const updateGuest = useCallback((seatNumber, field, value) => {
     setGuests((prev) => {
       const next = { ...prev };
-      const cur = next[seatNumber] || { name: '', note: '' };
+      const cur = next[seatNumber] || { name: '', role: '', note: '' };
       const upd = { ...cur, [field]: value };
-      if (!upd.name && !upd.note) delete next[seatNumber];
+      if (!upd.name && !upd.role && !upd.note) delete next[seatNumber];
       else next[seatNumber] = upd;
       return next;
     });
@@ -316,10 +574,17 @@ function App() {
       lines.forEach((line, idx) => {
         const seatNum = idx + 1;
         if (seatNum > TOTAL_SEATS) return;
-        const parts = line.split(/[|;]/).map((s) => s.trim());
+        const parts = line.split('|').map((s) => s.trim());
         const name = parts[0] || '';
-        const note = parts.slice(1).join(' | ') || '';
-        if (name || note) next[seatNum] = { name, note };
+        let role = '';
+        let note = '';
+        if (parts.length === 2) {
+          note = parts[1];
+        } else if (parts.length >= 3) {
+          role = parts[1];
+          note = parts.slice(2).join(' | ');
+        }
+        if (name || role || note) next[seatNum] = { name, role, note };
       });
       return next;
     });
@@ -330,11 +595,12 @@ function App() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === 'Escape') {
-        if (showBulkImport) setShowBulkImport(false);
+        if (showGuestList) setShowGuestList(false);
+        else if (showBulkImport) setShowBulkImport(false);
         else if (showResetConfirm) setShowResetConfirm(false);
         else if (selectedSeat) setSelectedSeat(null);
       }
-      if (selectedSeat && !showBulkImport && !showResetConfirm) {
+      if (selectedSeat && !showBulkImport && !showResetConfirm && !showGuestList) {
         const tag = (e.target && e.target.tagName) || '';
         if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
@@ -348,13 +614,13 @@ function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [selectedSeat, showBulkImport, showResetConfirm]);
+  }, [selectedSeat, showBulkImport, showResetConfirm, showGuestList]);
 
   function exportCSV() {
-    const rows = [['№', 'ФИ гостя', 'Примечание']];
+    const rows = [['№', 'ФИ гостя', 'Кто это', 'Примечание']];
     for (let i = 1; i <= TOTAL_SEATS; i++) {
       const g = guests[i] || {};
-      rows.push([i, g.name || '', g.note || '']);
+      rows.push([i, g.name || '', g.role || '', g.note || '']);
     }
     const csv = rows.map((r) => r.map((c) => {
       const s = String(c ?? '');
@@ -372,13 +638,13 @@ function App() {
   }
 
   function exportXLSX() {
-    const data = [['№', 'ФИ гостя', 'Примечание']];
+    const data = [['№', 'ФИ гостя', 'Кто это', 'Примечание']];
     for (let i = 1; i <= TOTAL_SEATS; i++) {
       const g = guests[i] || {};
-      data.push([i, g.name || '', g.note || '']);
+      data.push([i, g.name || '', g.role || '', g.note || '']);
     }
     const ws = XLSX.utils.aoa_to_sheet(data);
-    ws['!cols'] = [{ wch: 6 }, { wch: 36 }, { wch: 42 }];
+    ws['!cols'] = [{ wch: 6 }, { wch: 36 }, { wch: 26 }, { wch: 36 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Рассадка');
     XLSX.writeFile(wb, `рассадка-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -387,7 +653,7 @@ function App() {
   const filledCount = Object.keys(guests).filter((k) => guests[k] && guests[k].name && guests[k].name.trim()).length;
 
   const allSeats = useMemo(() => Array.from({ length: TOTAL_SEATS }, (_, i) => ({
-    number: i + 1, ...(guests[i + 1] || { name: '', note: '' }),
+    number: i + 1, ...(guests[i + 1] || { name: '', role: '', note: '' }),
   })), [guests]);
 
   const filteredSeats = useMemo(() => {
@@ -396,10 +662,11 @@ function App() {
     return allSeats.filter((s) =>
       String(s.number).includes(q) ||
       s.name.toLowerCase().includes(q) ||
+      (s.role || '').toLowerCase().includes(q) ||
       s.note.toLowerCase().includes(q));
   }, [search, allSeats]);
 
-  const selectedGuest = selectedSeat ? guests[selectedSeat] || { name: '', note: '' } : null;
+  const selectedGuest = selectedSeat ? guests[selectedSeat] || { name: '', role: '', note: '' } : null;
 
   return (
     <div style={{
@@ -425,6 +692,9 @@ function App() {
               letterSpacing: '0.02em', margin: '3px 0 0 0', display: 'flex',
               alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span><span style={{ fontWeight: 600, color: '#5C2A3E' }}>{filledCount}</span> из {TOTAL_SEATS} мест заполнено</span>
+              {guestList.length > 0 && (
+                <span style={{ color: '#9A6B7C' }}>· {guestList.length} в списке</span>
+              )}
               {syncError ? (
                 <span style={{ color: '#9C2E4F' }}>⚠ ошибка соединения</span>
               ) : saveStatus === 'saving' ? (
@@ -439,6 +709,13 @@ function App() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button className="ws-btn ws-btn-ghost" onClick={() => setShowGuestList(true)}
+              title="Управление списком гостей">
+              <Icon name="list" /> Гости{guestList.length > 0 && <span style={{
+                background: 'rgba(232,173,192,0.5)', borderRadius: 10,
+                padding: '0 5px', fontSize: 11, fontWeight: 600,
+              }}>{guestList.length}</span>}
+            </button>
             <button className="ws-btn ws-btn-ghost" onClick={() => setShowBulkImport(true)}>
               <Icon name="upload" /> Импорт
             </button>
@@ -471,7 +748,7 @@ function App() {
                 </span>
                 <input className="ws-input" type="text" value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Поиск по имени или №"
+                  placeholder="Поиск по имени, роли или №"
                   style={{ paddingLeft: 32, fontSize: 13, padding: '9px 12px 9px 32px' }} />
               </div>
               <div style={{ overflowY: 'auto', flex: 1, marginRight: -4, paddingRight: 4 }}>
@@ -488,11 +765,18 @@ function App() {
                         background: filled ? '#E8ADC0' : 'transparent',
                         border: filled ? '1px solid #D88BA4' : '1px solid rgba(196,145,165,0.4)',
                         color: filled ? '#3A1828' : '#9A6B7C' }}>{seat.number}</span>
-                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden',
-                        textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 13,
-                        color: filled ? '#3A1828' : '#9A6B7C',
-                        fontStyle: filled ? 'normal' : 'italic' }}>
-                        {seat.name || 'свободно'}
+                      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+                        <span style={{ display: 'block', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          overflow: 'hidden', fontSize: 13,
+                          color: filled ? '#3A1828' : '#9A6B7C',
+                          fontStyle: filled ? 'normal' : 'italic' }}>
+                          {seat.name || 'свободно'}
+                        </span>
+                        {seat.role && (
+                          <span style={{ display: 'block', fontSize: 11, color: '#9A6B7C',
+                            textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden',
+                            fontStyle: 'italic' }}>{seat.role}</span>
+                        )}
                       </span>
                     </button>
                   );
@@ -514,7 +798,7 @@ function App() {
               onSelectSeat={setSelectedSeat} onHoverSeat={setHoveredSeat} />
             <div style={{ fontSize: 11.5, color: '#9A6B7C', textAlign: 'center',
               padding: '8px 4px 4px', letterSpacing: '0.04em' }}>
-              нажми на любое место, чтобы добавить или изменить гостя
+              нажми на любое место, чтобы добавить или изменить гостя
             </div>
           </section>
 
@@ -524,6 +808,7 @@ function App() {
               boxShadow: '0 1px 2px rgba(58,24,40,0.04)' }}>
               {selectedSeat ? (
                 <EditPanel seatNumber={selectedSeat} guest={selectedGuest}
+                  guestList={guestList}
                   onUpdate={updateGuest} onClear={() => clearSeat(selectedSeat)}
                   onClose={() => setSelectedSeat(null)}
                   onPrev={() => setSelectedSeat((s) => Math.max(1, (s || 1) - 1))}
@@ -536,6 +821,13 @@ function App() {
         </div>
       </main>
 
+      {showGuestList && (
+        <GuestListModal
+          guestList={guestList}
+          onSave={(list) => setGuestList(list)}
+          onClose={() => setShowGuestList(false)}
+        />
+      )}
 
       {showResetConfirm && (
         <Modal onClose={() => setShowResetConfirm(false)}>
@@ -554,16 +846,17 @@ function App() {
       {showBulkImport && (
         <Modal onClose={() => setShowBulkImport(false)}>
           <h2 style={{ fontFamily: '"Cormorant Garamond", serif', fontSize: 24, fontWeight: 600,
-            margin: '0 0 6px', color: '#3A1828' }}>Импорт списка гостей</h2>
+            margin: '0 0 6px', color: '#3A1828' }}>Импорт рассадки</h2>
           <p style={{ fontSize: 13, color: '#7B4D63', margin: '0 0 14px', lineHeight: 1.55 }}>
-            Каждая строка — один гость по порядку с места №1. Формат:{' '}
-            <code style={{ background: 'rgba(232,173,192,0.25)', padding: '1px 5px',
-              borderRadius: 4, fontSize: 12 }}>Имя Фамилия | примечание</code>{' '}
-            (примечание необязательно). Существующие записи в этих местах будут заменены.
+            Каждая строка — один гость по порядку, начиная с места №1. Форматы:{' '}
+            <code style={{ background: 'rgba(232,173,192,0.25)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>Имя</code>{' '}
+            или{' '}
+            <code style={{ background: 'rgba(232,173,192,0.25)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>Имя | кто это | примечание</code>.
+            Существующие записи в этих местах будут заменены.
           </p>
           <textarea className="ws-input" value={bulkText}
             onChange={(e) => setBulkText(e.target.value)}
-            placeholder={'Александр Кучма\nКсения Иванова | невеста\nИван Петров | веган, +1'}
+            placeholder={'Александр Кучма\nКсения Иванова | невеста\nИван Петров | друг жениха | веган, +1'}
             rows={11} style={{ resize: 'vertical', fontSize: 13 }} />
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
             <button className="ws-btn ws-btn-ghost" onClick={() => setShowBulkImport(false)}>Отмена</button>
@@ -657,7 +950,6 @@ function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSe
   );
 }
 
-
 function clipTooltipText(value, max = 34) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   return text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text;
@@ -665,10 +957,16 @@ function clipTooltipText(value, max = 34) {
 
 function SeatTooltip({ x, y, seatNumber, guest }) {
   const name = clipTooltipText(guest.name, 30);
-  const note = guest.note ? `${clipTooltipText(guest.note, 32)}` : '';
+  const role = guest.role ? clipTooltipText(guest.role, 34) : '';
+  const note = guest.note ? clipTooltipText(guest.note, 34) : '';
   const mainText = `№ ${seatNumber} — ${name}`;
-  const width = Math.max(132, Math.min(300, Math.max(mainText.length * 7.1, note ? note.length * 6.4 : 0) + 28));
-  const height = note ? 55 : 36;
+  const extraLines = [role, note].filter(Boolean);
+  const numLines = 1 + extraLines.length;
+
+  const width = Math.max(132, Math.min(320,
+    Math.max(mainText.length * 7.1, ...extraLines.map(l => l.length * 6.4)) + 28
+  ));
+  const height = 36 + extraLines.length * 19;
   const tooltipX = Math.max(-20, Math.min(1880 - width, x - width / 2));
   const tooltipY = y - height - 34;
 
@@ -677,18 +975,28 @@ function SeatTooltip({ x, y, seatNumber, guest }) {
       <rect className="ws-seat-tooltip-box" x="0" y="0" width={width} height={height} rx="10" ry="10" />
       <path d={`M ${x - tooltipX - 7} ${height - 1} L ${x - tooltipX} ${height + 8} L ${x - tooltipX + 7} ${height - 1} Z`}
         fill="rgba(58, 24, 40, 0.96)" />
-      <text className="ws-seat-tooltip-main" x="14" y={note ? 22 : 23}>{mainText}</text>
-      {note && <text className="ws-seat-tooltip-note" x="14" y="40">{note}</text>}
+      <text className="ws-seat-tooltip-main" x="14" y={numLines === 1 ? 23 : 21}>{mainText}</text>
+      {extraLines.map((line, i) => (
+        <text key={i}
+          className={i === 0 && role ? 'ws-seat-tooltip-role' : 'ws-seat-tooltip-note'}
+          x="14" y={21 + (i + 1) * 19}>{line}</text>
+      ))}
     </g>
   );
 }
 
-function EditPanel({ seatNumber, guest, onUpdate, onClear, onClose, onPrev, onNext }) {
+function EditPanel({ seatNumber, guest, guestList, onUpdate, onClear, onClose, onPrev, onNext }) {
   const nameRef = useRef(null);
   useEffect(() => {
     const t = setTimeout(() => nameRef.current && nameRef.current.focus(), 60);
     return () => clearTimeout(t);
   }, [seatNumber]);
+
+  const handleSelectGuest = (g) => {
+    onUpdate(seatNumber, 'name', g.name);
+    if (g.role) onUpdate(seatNumber, 'role', g.role);
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
@@ -707,21 +1015,43 @@ function EditPanel({ seatNumber, guest, onUpdate, onClear, onClose, onPrev, onNe
           <Icon name="x" size={16} />
         </button>
       </div>
-      <div style={{ marginBottom: 14 }}>
+
+      <div style={{ marginBottom: 12 }}>
         <label style={{ display: 'block', fontSize: 10.5, color: '#7B4D63',
-          marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>Имя и фамилия</label>
-        <input ref={nameRef} className="ws-input" type="text" value={guest.name}
-          onChange={(e) => onUpdate(seatNumber, 'name', e.target.value)}
-          placeholder="напр. Иван Петров" />
+          marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
+          Имя и фамилия
+        </label>
+        <AutocompleteInput
+          inputRef={nameRef}
+          value={guest.name}
+          onChange={(v) => onUpdate(seatNumber, 'name', v)}
+          guestList={guestList}
+          onSelectGuest={handleSelectGuest}
+          placeholder={guestList.length > 0 ? 'Начните вводить или выберите из списка' : 'напр. Иван Петров'}
+        />
       </div>
+
+      <div style={{ marginBottom: 12 }}>
+        <label style={{ display: 'block', fontSize: 10.5, color: '#7B4D63',
+          marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
+          Кто это
+        </label>
+        <input className="ws-input" type="text" value={guest.role || ''}
+          onChange={(e) => onUpdate(seatNumber, 'role', e.target.value)}
+          placeholder="мама жениха, тётя невесты, друг…" />
+      </div>
+
       <div style={{ marginBottom: 18 }}>
         <label style={{ display: 'block', fontSize: 10.5, color: '#7B4D63',
-          marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>Примечание</label>
-        <textarea className="ws-input" value={guest.note}
+          marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.1em', fontWeight: 600 }}>
+          Примечание
+        </label>
+        <textarea className="ws-input" value={guest.note || ''}
           onChange={(e) => onUpdate(seatNumber, 'note', e.target.value)}
-          placeholder="вегетарианец, +1, друг невесты…"
-          rows={3} style={{ resize: 'vertical', fontSize: 13 }} />
+          placeholder="вегетарианец, +1, аллергия…"
+          rows={2} style={{ resize: 'vertical', fontSize: 13 }} />
       </div>
+
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
         <div style={{ display: 'flex', gap: 4 }}>
           <button className="ws-btn ws-btn-ghost" onClick={onPrev} disabled={seatNumber <= 1}
@@ -755,13 +1085,13 @@ function EmptyEdit() {
       <h3 style={{ fontFamily: '"Cormorant Garamond", serif', fontSize: 22,
         fontWeight: 500, margin: '0 0 8px', color: '#3A1828' }}>Выбери место</h3>
       <p style={{ fontSize: 13, color: '#7B4D63', lineHeight: 1.55, margin: 0 }}>
-        Нажми на нужное место на схеме или в спике, чтобы добавить или изменить гостя
+        Нажми на нужное место на схеме или в списке, чтобы добавить или изменить гостя
       </p>
     </div>
   );
 }
 
-function Modal({ children, onClose }) {
+function Modal({ children, onClose, wide }) {
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -769,12 +1099,13 @@ function Modal({ children, onClose }) {
   }, [onClose]);
   return (
     <div className="ws-modal-bg" onClick={onClose}>
-      <div className="ws-modal" onClick={(e) => e.stopPropagation()}>{children}</div>
+      <div className={`ws-modal${wide ? ' ws-modal-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+        {children}
+      </div>
     </div>
   );
 }
 
-// убираем заглушку загрузки и монтируем приложение
 const loadingEl = document.getElementById('app-loading');
 if (loadingEl) loadingEl.remove();
 const root = ReactDOM.createRoot(document.getElementById('root'));
