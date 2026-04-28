@@ -178,7 +178,7 @@ const Icon = ({ name, size = 14 }) => {
 };
 
 // — Autocomplete input for guest name —
-function AutocompleteInput({ inputRef, value, onChange, guestList, onSelectGuest, placeholder }) {
+function AutocompleteInput({ inputRef, value, onChange, guestList, takenNames, onSelectGuest, placeholder }) {
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
 
@@ -186,8 +186,8 @@ function AutocompleteInput({ inputRef, value, onChange, guestList, onSelectGuest
     if (!guestList || guestList.length === 0) return [];
     const q = (value || '').toLowerCase().trim();
     const filtered = q ? guestList.filter(g => g.name.toLowerCase().includes(q)) : guestList;
-    return filtered.slice(0, 8);
-  }, [value, guestList]);
+    return filtered.filter(g => !takenNames || !takenNames.has(g.name.toLowerCase())).slice(0, 8);
+  }, [value, guestList, takenNames]);
 
   const select = (g) => { onSelectGuest(g); setOpen(false); };
 
@@ -221,8 +221,8 @@ function AutocompleteInput({ inputRef, value, onChange, guestList, onSelectGuest
             <div key={i} className={`ws-ac-item${i === hi ? ' is-hi' : ''}`}
               onMouseDown={e => { e.preventDefault(); select(g); }}
               onMouseEnter={() => setHi(i)}>
-              <span style={{ fontSize: 13, fontWeight: 500, color: '#3A1828', flex: 1 }}>{g.name}</span>
-              {g.role && <span style={{ fontSize: 11, color: '#9A6B7C', fontStyle: 'italic' }}>{g.role}</span>}
+              <span style={{ fontSize: 13, fontWeight: 500, color: '#3A1828', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</span>
+              {g.role && <span style={{ fontSize: 11, color: '#9A6B7C', fontStyle: 'italic', flexShrink: 0, maxWidth: '45%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.role}</span>}
             </div>
           ))}
         </div>
@@ -812,7 +812,7 @@ function App() {
               boxShadow: '0 1px 2px rgba(58,24,40,0.04)' }}>
               {selectedSeat ? (
                 <EditPanel seatNumber={selectedSeat} guest={selectedGuest}
-                  guestList={guestList}
+                  guestList={guestList} guests={guests}
                   onUpdate={updateGuest} onClear={() => clearSeat(selectedSeat)}
                   onClose={() => setSelectedSeat(null)}
                   onPrev={() => setSelectedSeat((s) => Math.max(1, (s || 1) - 1))}
@@ -1001,12 +1001,23 @@ function SeatTooltip({ x, y, seatNumber, guest }) {
   );
 }
 
-function EditPanel({ seatNumber, guest, guestList, onUpdate, onClear, onClose, onPrev, onNext }) {
+function EditPanel({ seatNumber, guest, guestList, guests, onUpdate, onClear, onClose, onPrev, onNext }) {
   const nameRef = useRef(null);
   useEffect(() => {
     const t = setTimeout(() => nameRef.current && nameRef.current.focus(), 60);
     return () => clearTimeout(t);
   }, [seatNumber]);
+
+  const takenNames = useMemo(() => {
+    const s = new Set();
+    Object.entries(guests).forEach(([seat, g]) => {
+      if (Number(seat) !== seatNumber && g && g.name && g.name.trim())
+        s.add(g.name.trim().toLowerCase());
+    });
+    return s;
+  }, [guests, seatNumber]);
+
+  const isDuplicate = !!(guest.name && guest.name.trim() && takenNames.has(guest.name.trim().toLowerCase()));
 
   const handleSelectGuest = (g) => {
     onUpdate(seatNumber, 'name', g.name);
@@ -1042,9 +1053,15 @@ function EditPanel({ seatNumber, guest, guestList, onUpdate, onClear, onClose, o
           value={guest.name}
           onChange={(v) => onUpdate(seatNumber, 'name', v)}
           guestList={guestList}
+          takenNames={takenNames}
           onSelectGuest={handleSelectGuest}
           placeholder={guestList.length > 0 ? 'Начните вводить или выберите из списка' : 'напр. Иван Петров'}
         />
+        {isDuplicate && (
+          <div style={{ fontSize: 12, color: '#9C2E4F', marginTop: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+            ⚠ Этот гость уже сидит на другом месте
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 12 }}>
