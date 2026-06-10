@@ -141,8 +141,16 @@ const RESPONSIVE_CSS = `
 @media (min-width: 1024px) {
   .ws-grid { grid-template-columns: 280px minmax(0,1fr) 320px; gap: 1.5rem; }
   .ws-list-order { order: 1; }
-  .ws-chart-order { order: 2; }
+  .ws-chart-order {
+    order: 2;
+    max-height: calc(100vh - var(--ws-header-height, 96px) - 40px);
+  }
   .ws-edit-order { order: 3; }
+  .ws-main { padding-bottom: 20px !important; }
+  .ws-chart-svg {
+    height: calc(100vh - var(--ws-header-height, 96px) - 92px) !important;
+    min-height: 0;
+  }
 }
 .ws-input { width: 100%; padding: 10px 12px; border-radius: 8px;
   border: 1px solid rgba(196,145,165,0.35); background: rgba(255,255,255,0.7);
@@ -749,7 +757,7 @@ function App() {
         </div>
       </header>
 
-      <main style={{ padding: '20px 20px 60px' }}>
+      <main className="ws-main" style={{ padding: '20px 20px 60px' }}>
         <div className="ws-grid">
           <aside className="ws-list-order">
             <div style={{ position: 'sticky', top: 90, background: 'rgba(255,255,255,0.55)',
@@ -889,9 +897,9 @@ function SVGChart({ seatPositions, guests, selectedSeat, hoveredSeat, onSelectSe
   const activeTooltipGuest = activeTooltipSeat ? guests[activeTooltipSeat] : null;
   const showSeatTooltip = !!(activeTooltipPos && activeTooltipGuest && activeTooltipGuest.name && activeTooltipGuest.name.trim());
   return (
-    <div style={{ width: '100%', overflowX: 'auto' }} onMouseLeave={() => onHoverSeat(null)}>
-      <svg viewBox="150 90 1500 700"
-        style={{ width: '100%', minWidth: 760, height: 'auto', display: 'block' }}
+    <div style={{ width: '100%', overflow: 'hidden' }} onMouseLeave={() => onHoverSeat(null)}>
+      <svg className="ws-chart-svg" viewBox="150 90 1500 700"
+        style={{ width: '100%', height: 'auto', display: 'block' }}
         preserveAspectRatio="xMidYMid meet">
         <defs>
           <linearGradient id="ws-tableGrad" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -987,8 +995,11 @@ function SeatTooltip({ x, y, seatNumber, guest }) {
   const width = Math.max(140, Math.max(mainW, roleW) + 28);
   const height = hasRole ? 55 : 36;
 
-  const tooltipX = Math.max(-20, Math.min(1880 - width, x - width / 2));
-  const tooltipY = y - height - 34;
+  const viewBoxLeft = 150;
+  const viewBoxRight = 1650;
+  const opensBelow = seatNumber >= 8 && seatNumber <= 22;
+  const tooltipX = Math.max(viewBoxLeft + 8, Math.min(viewBoxRight - width - 8, x - width / 2));
+  const tooltipY = opensBelow ? y + 34 : y - height - 34;
   const arrowX = x - tooltipX;
 
   // Position of note dot — right side, vertically centred on whichever is the last line
@@ -998,7 +1009,9 @@ function SeatTooltip({ x, y, seatNumber, guest }) {
   return (
     <g className="ws-seat-tooltip" transform={`translate(${tooltipX}, ${tooltipY})`}>
       <rect className="ws-seat-tooltip-box" x="0" y="0" width={width} height={height} rx="10" ry="10" />
-      <path d={`M ${arrowX - 7} ${height - 1} L ${arrowX} ${height + 8} L ${arrowX + 7} ${height - 1} Z`}
+      <path d={opensBelow
+        ? `M ${arrowX - 7} 1 L ${arrowX} -8 L ${arrowX + 7} 1 Z`
+        : `M ${arrowX - 7} ${height - 1} L ${arrowX} ${height + 8} L ${arrowX + 7} ${height - 1} Z`}
         fill="rgba(58, 24, 40, 0.96)" />
       <text className="ws-seat-tooltip-main" x="14" y={hasRole ? 21 : 23}>{mainText}</text>
       {hasRole && (
