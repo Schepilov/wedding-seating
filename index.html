@@ -53,19 +53,75 @@
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-const TOTAL_SEATS = 54;
-const INNER_SEATS = 28;
+const TOTAL_SEATS = 52;
 const DOC_ID = 'main';
 
-const PATH_D =
-  'M 60 720 ' +
-  'C 280 720 240 540 480 540 ' +
-  'C 640 540 580 290 760 290 ' +
-  'L 1080 290 ' +
-  'C 1260 290 1200 540 1360 540 ' +
-  'C 1600 540 1560 720 1780 720';
+const TABLES = [
+  { number: 1, x: 350, y: 535, width: 110, height: 220 },
+  { number: 2, x: 350, y: 315, width: 110, height: 220 },
+  { number: 3, x: 350, y: 205, width: 220, height: 110 },
+  { number: 4, x: 570, y: 205, width: 220, height: 110 },
+  { number: 5, x: 790, y: 205, width: 220, height: 110 },
+  { number: 6, x: 1010, y: 205, width: 220, height: 110 },
+  { number: 7, x: 1230, y: 205, width: 220, height: 110 },
+  { number: 8, x: 1340, y: 315, width: 110, height: 220 },
+  { number: 9, x: 1340, y: 535, width: 110, height: 220 },
+];
 
-const JOINT_TS = [0.105, 0.205, 0.31, 0.69, 0.795, 0.895];
+const SEAT_POSITIONS = [
+  { number: 1, x: 285, y: 700 },
+  { number: 2, x: 285, y: 645 },
+  { number: 3, x: 285, y: 590 },
+  { number: 4, x: 285, y: 480 },
+  { number: 5, x: 285, y: 425 },
+  { number: 6, x: 285, y: 370 },
+  { number: 7, x: 305, y: 260 },
+  { number: 8, x: 405, y: 150 },
+  { number: 9, x: 460, y: 150 },
+  { number: 10, x: 515, y: 150 },
+  { number: 11, x: 625, y: 150 },
+  { number: 12, x: 680, y: 150 },
+  { number: 13, x: 735, y: 150 },
+  { number: 14, x: 845, y: 150 },
+  { number: 15, x: 900, y: 150 },
+  { number: 16, x: 955, y: 150 },
+  { number: 17, x: 1065, y: 150 },
+  { number: 18, x: 1120, y: 150 },
+  { number: 19, x: 1175, y: 150 },
+  { number: 20, x: 1285, y: 150 },
+  { number: 21, x: 1340, y: 150 },
+  { number: 22, x: 1395, y: 150 },
+  { number: 23, x: 1495, y: 260 },
+  { number: 24, x: 1515, y: 370 },
+  { number: 25, x: 1515, y: 425 },
+  { number: 26, x: 1515, y: 480 },
+  { number: 27, x: 1515, y: 590 },
+  { number: 28, x: 1515, y: 645 },
+  { number: 29, x: 1515, y: 700 },
+  { number: 30, x: 1275, y: 700 },
+  { number: 31, x: 1275, y: 645 },
+  { number: 32, x: 1275, y: 590 },
+  { number: 33, x: 1275, y: 480 },
+  { number: 34, x: 1275, y: 420 },
+  { number: 35, x: 1312.5, y: 370 },
+  { number: 36, x: 1257.5, y: 370 },
+  { number: 37, x: 1175, y: 370 },
+  { number: 38, x: 1120, y: 370 },
+  { number: 39, x: 1065, y: 370 },
+  { number: 40, x: 955, y: 370 },
+  { number: 41, x: 900, y: 370 },
+  { number: 42, x: 845, y: 370 },
+  { number: 43, x: 735, y: 370 },
+  { number: 44, x: 680, y: 370 },
+  { number: 45, x: 625, y: 370 },
+  { number: 46, x: 542.5, y: 370 },
+  { number: 47, x: 487.5, y: 370 },
+  { number: 48, x: 525, y: 420 },
+  { number: 49, x: 525, y: 480 },
+  { number: 50, x: 525, y: 590 },
+  { number: 51, x: 525, y: 645 },
+  { number: 52, x: 525, y: 700 },
+];
 
 const RESPONSIVE_CSS = `
 .ws-grid { display: grid; gap: 1.25rem; grid-template-columns: 1fr; align-items: start; }
@@ -429,8 +485,6 @@ function App() {
   const [loaded, setLoaded] = useState(false);
   const [selectedSeat, setSelectedSeat] = useState(null);
   const [hoveredSeat, setHoveredSeat] = useState(null);
-  const [seatPositions, setSeatPositions] = useState([]);
-  const [jointPositions, setJointPositions] = useState([]);
   const [search, setSearch] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showBulkImport, setShowBulkImport] = useState(false);
@@ -506,49 +560,6 @@ function App() {
     }, 500);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [guests, guestList, loaded]);
-
-  const handlePathRef = useCallback((node) => {
-    if (!node) return;
-    const totalLength = node.getTotalLength();
-    const positions = [];
-    const PERP = 64;
-    const tangentAt = (length) => {
-      const delta = 1;
-      const a = node.getPointAtLength(Math.max(0, length - delta));
-      const b = node.getPointAtLength(Math.min(totalLength, length + delta));
-      const tx = b.x - a.x, ty = b.y - a.y;
-      const len = Math.hypot(tx, ty) || 1;
-      return { tx: tx / len, ty: ty / len };
-    };
-    for (let i = 0; i < INNER_SEATS; i++) {
-      const t = (i + 0.5) / INNER_SEATS;
-      const length = t * totalLength;
-      const p = node.getPointAtLength(length);
-      const { tx, ty } = tangentAt(length);
-      positions.push({ number: i + 1, x: p.x + -ty * PERP, y: p.y + tx * PERP });
-    }
-    const outerCount = TOTAL_SEATS - INNER_SEATS;
-    for (let i = 0; i < outerCount; i++) {
-      const t = (i + 0.5) / outerCount;
-      const length = (1 - t) * totalLength;
-      const p = node.getPointAtLength(length);
-      const { tx, ty } = tangentAt(length);
-      positions.push({ number: INNER_SEATS + i + 1, x: p.x + ty * PERP, y: p.y + -tx * PERP });
-    }
-    setSeatPositions(positions);
-
-    const HALF_TABLE = 37;
-    const joints = JOINT_TS.map((t) => {
-      const length = t * totalLength;
-      const p = node.getPointAtLength(length);
-      const { tx, ty } = tangentAt(length);
-      return {
-        x1: p.x + -ty * HALF_TABLE, y1: p.y + tx * HALF_TABLE,
-        x2: p.x + ty * HALF_TABLE, y2: p.y + -tx * HALF_TABLE,
-      };
-    });
-    setJointPositions(joints);
-  }, []);
 
   const updateGuest = useCallback((seatNumber, field, value) => {
     setGuests((prev) => {
@@ -654,7 +665,8 @@ function App() {
     XLSX.writeFile(wb, `рассадка-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  const filledCount = Object.keys(guests).filter((k) => guests[k] && guests[k].name && guests[k].name.trim()).length;
+  const filledCount = Array.from({ length: TOTAL_SEATS }, (_, i) => guests[i + 1])
+    .filter((guest) => guest && guest.name && guest.name.trim()).length;
 
   const allSeats = useMemo(() => Array.from({ length: TOTAL_SEATS }, (_, i) => ({
     number: i + 1, ...(guests[i + 1] || { name: '', role: '', note: '' }),
@@ -796,8 +808,7 @@ function App() {
             background: '#FAF6F1', border: '1px solid rgba(196,145,165,0.28)',
             borderRadius: 14, padding: 8, overflow: 'hidden',
             boxShadow: '0 1px 2px rgba(58,24,40,0.04)' }}>
-            <SVGChart onPathRef={handlePathRef} seatPositions={seatPositions}
-              jointPositions={jointPositions} guests={guests}
+            <SVGChart seatPositions={SEAT_POSITIONS} guests={guests}
               selectedSeat={selectedSeat} hoveredSeat={hoveredSeat}
               onSelectSeat={setSelectedSeat} onHoverSeat={setHoveredSeat} />
             <div style={{ fontSize: 11.5, color: '#9A6B7C', textAlign: 'center',
@@ -872,14 +883,14 @@ function App() {
   );
 }
 
-function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSeat, hoveredSeat, onSelectSeat, onHoverSeat }) {
+function SVGChart({ seatPositions, guests, selectedSeat, hoveredSeat, onSelectSeat, onHoverSeat }) {
   const activeTooltipSeat = hoveredSeat || selectedSeat;
   const activeTooltipPos = activeTooltipSeat ? seatPositions.find((p) => p.number === activeTooltipSeat) : null;
   const activeTooltipGuest = activeTooltipSeat ? guests[activeTooltipSeat] : null;
   const showSeatTooltip = !!(activeTooltipPos && activeTooltipGuest && activeTooltipGuest.name && activeTooltipGuest.name.trim());
   return (
     <div style={{ width: '100%', overflowX: 'auto' }} onMouseLeave={() => onHoverSeat(null)}>
-      <svg viewBox="-40 120 1880 700"
+      <svg viewBox="150 90 1500 700"
         style={{ width: '100%', minWidth: 760, height: 'auto', display: 'block' }}
         preserveAspectRatio="xMidYMid meet">
         <defs>
@@ -905,14 +916,18 @@ function SVGChart({ onPathRef, seatPositions, jointPositions, guests, selectedSe
             <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
-        <path ref={onPathRef} d={PATH_D} stroke="url(#ws-tableGrad)" strokeWidth="74"
-          strokeLinecap="round" fill="none" filter="url(#ws-tableShadow)" />
-        <path d={PATH_D} stroke="rgba(255,255,255,0.4)" strokeWidth="1.5"
-          strokeLinecap="round" fill="none" style={{ pointerEvents: 'none' }} />
-        {jointPositions.map((j, i) => (
-          <line key={`j-${i}`} x1={j.x1} y1={j.y1} x2={j.x2} y2={j.y2}
-            stroke="rgba(140, 50, 80, 0.4)" strokeWidth="1.5" strokeLinecap="butt"
-            style={{ pointerEvents: 'none' }} />
+        {TABLES.map((table) => (
+          <g key={`table-${table.number}`}>
+            <rect x={table.x} y={table.y} width={table.width} height={table.height}
+              fill="url(#ws-tableGrad)" stroke="rgba(140, 50, 80, 0.4)" strokeWidth="1.5"
+              filter="url(#ws-tableShadow)" />
+            <text x={table.x + table.width / 2} y={table.y + table.height / 2}
+              textAnchor="middle" dominantBaseline="central" fontSize="30" fontWeight="600"
+              fill="#5C2A3E" fontFamily='"Cormorant Garamond", serif'
+              style={{ pointerEvents: 'none', userSelect: 'none' }}>
+              {table.number}
+            </text>
+          </g>
         ))}
         {seatPositions.map((pos) => {
           const guest = guests[pos.number];
